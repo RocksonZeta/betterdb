@@ -6,8 +6,6 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
-
-	_ "github.com/go-sql-driver/mysql"
 )
 
 func ReflectScan(args []reflect.Value) []reflect.Value {
@@ -24,10 +22,7 @@ func ReflectScan(args []reflect.Value) []reflect.Value {
 		} else {
 			fields[i] = record.FieldByName(n).Addr().Interface()
 		}
-
-		//fields[i] = record.Field(i).Addr().Interface()
 	}
-
 	rows.Scan(fields...)
 	return nil
 }
@@ -58,21 +53,51 @@ func Query(db *sql.DB, s string, records interface{}, args ...interface{}) {
 		results.Set(reflect.Append(results, record.Elem()))
 	}
 }
+func Execute(db *sql.DB, s string, args ...interface{}) {
+	//st, e := db.Prepare(s)
 
-//variable placeholder should have this form ":var",eg."select name from user where name=:name"
-func NamedQuery(db *sql.DB, s string, records, namedArgs map[string]interface{}) {
-	re := regexp.MustCompile(":\\w+\\b")
-	var args []interface{}
-	st := re.ReplaceAllStringFunc(s, func(key string) string {
-		fmt.Println(key)
+}
+
+/**
+map (:name,:age ,{"Name":"jim" , "Age":20}) -> ("?,?",['jim',20])
+*/
+func TransNameStr(s string, namedArgs map[string]interface{}) (st string, args []interface{}) {
+	re := regexp.MustCompile(":\\w+")
+	st = re.ReplaceAllStringFunc(s, func(key string) string {
 		if n, ok := namedArgs[strings.TrimPrefix(key, ":")]; ok {
 			args = append(args, n)
 			return "?"
 		}
 		return key
 	})
+	return
+}
+
+func Pick(obj interface{}, keys ...string) (result map[string]interface{}) {
+	values := reflect.ValueOf(obj)
+	var field reflect.Value
+	result = make(map[string]interface{})
+	if 0 == len(keys) {
+		for i := 0; i < values.NumField(); i++ {
+			field = values.Field(i)
+			result[field.String()] = field.Interface()
+		}
+	} else {
+		for _, k := range keys {
+			field = values.FieldByName(k)
+			if field.IsValid() {
+				result[field.String()] = field.Interface()
+			}
+		}
+	}
+	return
+}
+
+//variable placeholder should have this form ":var",eg."select name from user where name=:name"
+func NamedQuery(db *sql.DB, s string, records, namedArgs map[string]interface{}) {
+	st, args := TransNameStr(s, namedArgs)
 	fmt.Println(st, args)
-	//Query(db, st, records, args)
+	Query(db, st, records, args)
 }
 
 type BetterDB struct {
@@ -97,5 +122,13 @@ func (this *BetterDB) Put(table string, id interface{}, newValues interface{}) {
 
 }
 func (this *BetterDB) Delete(table string, id interface{}) {
+
+}
+
+func (this *BetterDB) BatchSqls(sqls []string) {
+
+}
+
+func (this *BetterDB) Batch(s string, values []map[string]interface{}) {
 
 }
