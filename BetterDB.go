@@ -38,6 +38,21 @@ func Query(db *sql.DB, s string, records interface{}, args ...interface{}) {
 		panic(e)
 	}
 	defer st.Close()
+	ExecuteQuery(st, records, args)
+}
+
+//variable placeholder should have this form ":var",eg."select name from user where name=:name"
+func NamedQuery(db *sql.DB, s string, records interface{}, namedArgs map[string]interface{}) {
+	st, args := TransNameStr(s, namedArgs)
+	fmt.Println(st, args)
+	Query(db, st, records, args...)
+}
+
+func NamedUpdate(db *sql.DB, s string, args interface{}) {
+
+}
+
+func ExecuteQuery(st *sql.Stmt, records interface{}, args ...interface{}) {
 	rows, e := st.Query(args...)
 	if nil != e {
 		panic(e)
@@ -53,9 +68,20 @@ func Query(db *sql.DB, s string, records interface{}, args ...interface{}) {
 		results.Set(reflect.Append(results, record.Elem()))
 	}
 }
-func Execute(db *sql.DB, s string, args ...interface{}) {
-	//st, e := db.Prepare(s)
 
+func ExecuteUpdate(st *sql.Stmt, args ...interface{}) (insertId int64, affectRows int64) {
+	r, e := st.Exec(args...)
+	if nil != e {
+		panic(e)
+	}
+	insertId, e := r.LastInsertId()
+	if nil != e {
+		panic(e)
+	}
+	affectRows, e := r.RowsAffected()
+	if nil != e {
+		panic(e)
+	}
 }
 
 /**
@@ -93,22 +119,15 @@ func Pick(obj interface{}, keys ...string) (result map[string]interface{}) {
 	return
 }
 
-//variable placeholder should have this form ":var",eg."select name from user where name=:name"
-func NamedQuery(db *sql.DB, s string, records, namedArgs map[string]interface{}) {
-	st, args := TransNameStr(s, namedArgs)
-	fmt.Println(st, args)
-	Query(db, st, records, args)
-}
-
 type BetterDB struct {
 	*sql.DB
 }
 
-func (this *BetterDB) BetterQuery(s string, records, args interface{}) {
+func (this *BetterDB) BetterQuery(s string, records interface{}, args interface{}) {
 
 }
 
-func (this *BetterDB) NamedQuery(s string, records, args interface{}) {
+func (this *BetterDB) NamedQuery(s string, records interface{}, args interface{}) {
 
 }
 
@@ -129,6 +148,9 @@ func (this *BetterDB) BatchSqls(sqls []string) {
 
 }
 
-func (this *BetterDB) Batch(s string, values []map[string]interface{}) {
+/**
+eg.insert into user(Name,Age) values(:Name,:Age) [{Name:"jim" , Age:12}]
+*/
+func (this *BetterDB) Batch(s string, values []interface{}) {
 
 }
