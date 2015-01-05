@@ -7,6 +7,12 @@ import (
 	"strings"
 )
 
+type ExecResult struct {
+	InsertId     int64
+	RowsAffected int64
+	Error        error
+}
+
 func ReflectScan(args []reflect.Value) []reflect.Value {
 	result := []reflect.Value{}
 	rows := args[0].Interface().(*sql.Rows)
@@ -60,8 +66,12 @@ func Scan(st *sql.Stmt, records interface{}, args ...interface{}) error {
 	return nil
 }
 
-func NamedScan(st *sql.Stmt, s string, records interface{}, namedArgs interface{}) error {
-	st, args := TransNameStr(s, namedArgs)
+func NamedScan(db *sql.DB, s string, records interface{}, namedArgs interface{}) error {
+	sqlstring, args := TransNameStr(s, namedArgs)
+	st, e := db.Prepare(sqlstring)
+	if nil != e {
+		return e
+	}
 	return Scan(st, records, args...)
 }
 
@@ -78,35 +88,44 @@ func Select(db *sql.DB, s string, records interface{}, args ...interface{}) erro
 //variable placeholder should have this form ":var",eg."select name from user where name=:name"
 func NamedSelect(db *sql.DB, s string, records interface{}, namedArgs interface{}) error {
 	st, args := TransNameStr(s, namedArgs)
-	return Query(db, st, records, args...)
+	return Select(db, st, records, args...)
 }
 
-func NamedUpdate(db *sql.DB, s string, args interface{}) {
-
-}
-
-func ExecuteUpdate(st *sql.Stmt, args ...interface{}) (insertId int64, affectRows int64, e error) {
-	var r sql.Result
-	r, e = st.Exec(args...)
+func Exec(st *sql.Stmt, args []interface{}) (result ExecResult) {
+	r, e := st.Exec(args...)
 	if nil != e {
+		result.Error = e
 		return
 	}
-	insertId, e = r.LastInsertId()
+	result.RowsAffected, e = r.RowsAffected()
 	if nil != e {
+		result.Error = e
 		return
 	}
-	affectRows, e = r.RowsAffected()
+	result.InsertId, e = r.LastInsertId()
 	if nil != e {
+		result.Error = e
 		return
 	}
 	return
 }
 
+func NamedUpdate(db *sql.DB, s string, args interface{}) []ExecResult {
+	//st, e := db.Prepare(s)
+	//if nil != e {
+	//	return []ExecResult{ExecResult{Error: e}}
+	//}
+	//rargs := reflect.ValueOf(args)RowsAffected
+
+	return []ExecResult{}
+
+}
+
 /**
-map (:name,:age ,{"Name":"jim" , "Age":20}) -> ("?,?",['jim',20])
+map (:Name,:Age ,{"Name":"jim" , "Age":20}) -> ("?,?",['jim',20])
 */
 func TransNameStr(s string, namedArgs interface{}) (st string, args []interface{}) {
-	re := regexp.MustCompile(":\\w+")
+	re := regexp.MustCompile(":[^0-9]\\w*")
 	kvs := KeyValues{namedArgs}
 	st = re.ReplaceAllStringFunc(s, func(key string) string {
 		if n, ok := kvs.Get(strings.TrimPrefix(key, ":")); ok {
@@ -123,21 +142,25 @@ type BetterDB struct {
 }
 
 func (this *BetterDB) Select(s string, records interface{}, args ...interface{}) error {
-	return Select(this, s, records, args...)
+	return Select(this.DB, s, records, args...)
 }
 
 func (this *BetterDB) NamedSelect(s string, records interface{}, args interface{}) error {
-	return NamedSelect(this, records, args...)
+	return NamedSelect(this.DB, s, records, args)
 }
-func (this *BetterDB) Update(s string, records interface{}, args ...interface{}) error {
-	return nil
+func (this *BetterDB) Update(s string, args ...interface{}) ExecResult {
+	st, e := this.DB.Prepare(s)
+	if nil != e {
+		return ExecResult{Error: e}
+	}
+	return Exec(st, args)
 }
-func (this *BetterDB) UpdateNamed(s string, records interface{}, args interface{}) error {
+func (this *BetterDB) NamedUpdate(s string, records interface{}) error {
 	return nil
 }
 
 //
-func (this *BetterDB) UpdateBatch(s string, records interface{}, args interface{}) error {
+func (this *BetterDB) UpdateBatch(s string, args interface{}) error {
 	return nil
 }
 
