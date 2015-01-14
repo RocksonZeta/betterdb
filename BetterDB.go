@@ -91,34 +91,73 @@ func NamedSelect(db *sql.DB, s string, records interface{}, namedArgs interface{
 	return Select(db, st, records, args...)
 }
 
-func Exec(st *sql.Stmt, args []interface{}) (result ExecResult) {
-	r, e := st.Exec(args...)
+func ReadExecResult(result sql.Result, e error) *ExecResult {
+	execResult := &ExecResult{}
 	if nil != e {
-		result.Error = e
-		return
+		execResult.Error = e
+		return execResult
 	}
-	result.RowsAffected, e = r.RowsAffected()
+	execResult.RowsAffected, e = result.RowsAffected()
 	if nil != e {
-		result.Error = e
-		return
+		execResult.Error = e
+		return execResult
 	}
-	result.InsertId, e = r.LastInsertId()
+	execResult.InsertId, e = result.LastInsertId()
 	if nil != e {
-		result.Error = e
-		return
+		execResult.Error = e
+		return execResult
 	}
-	return
+	return execResult
 }
 
-func NamedUpdate(db *sql.DB, s string, args interface{}) []ExecResult {
+func Exec(st *sql.Stmt, args []interface{}) *ExecResult {
+	r, e := st.Exec(args...)
+	return ReadExecResult(r, e)
+}
+
+//s - sql
+//args can be struct , map , []struct , []map
+func NamedUpdate(db *sql.DB, s string, args interface{}) []*ExecResult {
+	names := ParseNamedStr(s)
+	if 0 == len(names) {
+		r, e := db.Exec(s)
+		return []*ExecResult{ReadExecResult(r, e)}
+	}
 	//st, e := db.Prepare(s)
 	//if nil != e {
-	//	return []ExecResult{ExecResult{Error: e}}
+	//	return []*ExecResult{&ExecResult{Error: e}}
 	//}
-	//rargs := reflect.ValueOf(args)RowsAffected
+	//value := reflect.ValueOf(this.Data)
+	//for "ptr" == value.Kind().String() {
+	//	value = value.Elem()
+	//	return
+	//}
+	//if "map" == value.Kind().String() {
+	//	(value.Interface().(map[string]interface{}))[key] = val
+	//	return
+	//}
+	//if "struct" == value.Kind().String() {
+	//	field := value.FieldByName(key)
+	//	if field.CanSet() {
+	//		field.Set(reflect.ValueOf(val))
+	//	}
+	//	return
+	//}
 
-	return []ExecResult{}
+	//st.Exec()
 
+	return []*ExecResult{}
+
+}
+
+func ParseNamedStr(s string) []string {
+	re := regexp.MustCompile(":[^0-9]\\w*")
+	rawNames := re.FindAllString(s, -1)
+	result := make([]string, len(rawNames))
+	for i, rawName := range rawNames {
+		result[i] = strings.TrimPrefix(rawName, ":")
+	}
+	return result
 }
 
 /**
@@ -148,13 +187,14 @@ func (this *BetterDB) Select(s string, records interface{}, args ...interface{})
 func (this *BetterDB) NamedSelect(s string, records interface{}, args interface{}) error {
 	return NamedSelect(this.DB, s, records, args)
 }
-func (this *BetterDB) Update(s string, args ...interface{}) ExecResult {
-	st, e := this.DB.Prepare(s)
-	if nil != e {
-		return ExecResult{Error: e}
-	}
-	return Exec(st, args)
-}
+
+//func (this *BetterDB) Update(s string, args ...interface{}) ExecResult {
+//	st, e := this.DB.Prepare(s)
+//	if nil != e {
+//		return ExecResult{Error: e}
+//	}
+//	return Exec(st, args)
+//}
 func (this *BetterDB) NamedUpdate(s string, records interface{}) error {
 	return nil
 }
